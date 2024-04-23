@@ -1,0 +1,411 @@
+<template>
+  <div>
+
+    <sg-nav></sg-nav>
+
+    <el-row>
+      <el-col :span="6">
+        <el-card style="width: 100%; min-height: 300px; color: #333">
+          <!--          <div style="padding-bottom: 10px; border-bottom: 1px solid #ccc">在线用户<span style="font-size: 12px">（点击聊天气泡开始聊天）</span></div>-->
+          <!--          <div style="padding: 10px 0" v-for="user in users" :key="user.username">-->
+          <!--            <span>{{ user.username }}</span>-->
+          <!--            <i class="el-icon-chat-dot-round" style="margin-left: 10px; font-size: 16px; cursor: pointer"-->
+          <!--               @click="chatUser = user.username"></i>-->
+          <!--            <span style="font-size: 12px;color: limegreen; margin-left: 5px" v-if="user.username === chatUser">chatting...</span>-->
+          <!--          </div>-->
+        </el-card>
+      </el-col>
+      <el-col :span="16">
+        <div class="chat-container">
+          <div class="chat-header">
+            <h2 class="chat-title">虚拟咨询师</h2>
+          </div>
+
+          <div class="chat-content" style="overflow-y: auto;">
+            <div v-html="content"></div>
+
+          </div>
+
+          <div class="chat-input-container">
+            <textarea v-model="text" class="chat-input" placeholder="请输入您的消息..." rows="3" spellcheck="false"></textarea>
+            <button class="chat-send-button" type="button" @click="send">发送</button>
+          </div>
+        </div>
+      </el-col>
+    </el-row>
+
+
+    <!--    <sg-foot class="foots"></sg-foot>-->
+
+  </div>
+</template>
+<script>
+import request from "@/utils/request";
+
+import header from "../components/header.vue";
+import ArticledetailBottom from "../components/ArticledetailBottom.vue";
+let socket;
+export default {
+  name: "Im",
+  components: {
+    "sg-nav": header,
+    "sg-foot": ArticledetailBottom,
+  },
+  data() {
+    return {
+      circleUrl: 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png',
+      user: {},
+      isCollapse: false,
+      users: [],
+      chatUser: '',
+      text: "",
+      messages: [],
+      content: '',
+      msg:""
+    }
+  },
+  created() {
+    this.init()
+  },
+  methods: {
+    send() {
+      // if (!this.chatUser) {
+      //   this.$message({type: 'warning', message: "请选择聊天对象"})
+      //   return;
+      // }
+      if (!this.text) {
+        this.$message({ type: 'warning', message: "请输入内容" })
+      } else {
+        if (typeof (WebSocket) == "undefined") {
+          console.log("您的浏览器不支持WebSocket");
+        } else {
+          console.log("您的浏览器支持WebSocket");
+          // 组装待发送的消息 json
+          // {"from": "zhang", "to": "admin", "text": "聊天文本"}
+          let message = { text: this.text }
+          //todo 模型参数
+
+
+          socket.send(JSON.stringify(message));  // 将组装好的json发送给服务端，由服务端进行转发
+          this.messages.push({ text: this.text })
+          // 构建消息内容，本人消息
+          this.createContent(null, this.user.nickName, this.text)
+          this.text = '';
+        }
+      }
+    },
+    createContent(remoteUser, nowUser, text) {  // 这个方法是用来将 json的聊天消息数据转换成 html的。
+      let html
+      console.log("remoteUser", remoteUser);
+      console.log("nowUser", nowUser);
+
+      // 当前用户消息
+      if (nowUser) { // nowUser 表示是否显示当前用户发送的聊天消息，绿色气泡
+        html = "<div class=\"el-row\" style=\"padding: 5px 0\">\n" +
+
+          "  <div class=\"el-col el-col-2\" style=\"text-align: right\">\n" +
+          "  <span class=\"el-avatar el-avatar--circle\" style=\"height: 40px; width: 40px; line-height: 40px;\">\n" +
+          "    <img src=\"https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png\" class=\"img\">\n" +
+          "  </span>\n" +
+          "  </div>\n" +
+          "  <div class=\"el-col el-col-22\" style=\"text-align: right; margin-left: 25px\">\n" +
+          "    <div class=\"tip left\">" + text + "</div>\n" +
+          "  </div>\n" +
+          "</div>";
+      } else if (remoteUser) {   // remoteUser表示远程用户聊天消息，蓝色的气泡
+        html = "<div class=\"el-row\" style=\"padding: 5px 0\">\n" +
+          "  <div class=\"el-col el-col-2\" style=\"text-align: right\">\n" +
+          "  <span class=\"el-avatar el-avatar--circle\" style=\"height: 40px; width: 40px; line-height: 40px;\">\n" +
+          "    <img src=\"https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png\" class=\"img\">\n" +
+          "  </span>\n" +
+          "  </div>\n" +
+          "  <div class=\"el-col el-col-22\" style=\" text-align: right; \">\n" +
+          "    <div class=\"tip right\" style=\" position: relative; \" ref='test'>" + text + " <div class=\"cursor\"></div>" + "</div>\n" +
+          "  </div>\n" +
+          "</div>";
+      }
+      console.log(html)
+      this.content += html;
+    },
+    init() {
+      this.user = localStorage.getItem("userInfo") ? JSON.parse(localStorage.getItem("userInfo")) : {}
+      let userId = this.user.id;
+      let _this = this;
+      if (typeof (WebSocket) == "undefined") {
+        console.log("您的浏览器不支持WebSocket");
+      } else {
+        console.log("您的浏览器支持WebSocket");
+        let socketUrl = "ws://124.220.81.69:7777/websocketClient/" + userId;
+        if (socket != null) {
+          socket.close();
+          socket = null;
+        }
+        // 开启一个websocket服务
+        socket = new WebSocket(socketUrl);
+        //打开事件
+        socket.onopen = function () {
+          console.log("websocket已打开");
+        };
+
+
+
+
+        //  浏览器端收消息，获得从服务端发送过来的文本消息
+        socket.onmessage = function (msg) {
+          console.log("收到数据====", msg.data)
+          let data = msg.data  // 对收到的json数据进行解析， 类似这样的： {"users": [{"username": "zhang"},{ "username": "admin"}]}
+          // if (data.users) {  // 获取在线人员信息
+          //   _this.users = data.users.filter(user => user.username !== username)  // 获取当前连接的所有用户信息，并且排除自身，自己不会出现在自己的聊天列表里
+          // } else {
+          // 如果服务器端发送过来的json数据 不包含 users 这个key，那么发送过来的就是聊天文本json数据
+          //  // {"from": "zhang", "text": "hello"}
+          console.log(data)
+          if (data) {
+            _this.messages.push(data)
+            // 构建消息内容
+            _this.msg+=data
+            _this.createContent(true, false, _this.msg)
+            _this.$nextTick(()=>{
+              _this.updateCursor();
+            })
+          }
+          // }
+        };
+        //关闭事件
+        socket.onclose = function () {
+          console.log("websocket已关闭");
+        };
+        //发生了错误事件
+        socket.onerror = function () {
+          console.log("websocket发生了错误");
+        }
+      }
+    },
+    transfer(text) {
+
+      const paragraphs = text
+        .split(" ")
+        .filter(Boolean)
+        .map((word) => `<p>${word}</p>`);
+      console.log(paragraphs);
+      return paragraphs.join("");
+    },
+
+    async autoAppend() {
+      function delay(time) {
+        return new Promise((resolve) => setTimeout(resolve, time));
+      }
+
+      function transfer(text) {
+
+        const paragraphs = text
+          .split(" ")
+          .filter(Boolean)
+          .map((word) => `<p>${word}</p>`);
+        console.log(paragraphs);
+        return paragraphs.join("");
+      }
+
+      const content = `
+        1.全球沟通：英文是国际通用语言，能够让你更容易与世界各地的人交流。无论是商务、旅行还是跨文化交流，具备良好的英文能力都能极大地扩展你的沟通范围。
+        2.职业机会：许多国际公司和组织使用英文作为工作语言。掌握英文可以为你在职场上提供更广泛的职业机会，使你在全球范围内更具竞争力。
+        3.学术研究：英文是许多学术领域的主要语言。如果你有意进行深入的学术研究或参与国际性的学术合作，良好的英文能力将是必不可少的。
+        4.文化理解：学习英文也是一种了解英语国家文化的途径。通过阅读英文文学、观看英语电影和了解英语国家的历史，你可以更好地理解这些文化，增强跨文化交流的能力。
+        5.个人发展：学习一门外语对大脑的发展有益。掌握英文可以提升你的思维能力、解决问题的能力以及跨学科的理解，对个人发展和学习其他技能也会产生积极的影响。
+        
+        `;
+
+      for (let i = 0; i < content.length; i++) {
+        let text = content.slice(0, i);
+        console.log(text);
+        let result = transfer(text);
+        textElement.innerHTML = result;
+        this.updateCursor();
+        // await delay(100);
+      }
+    },
+
+    // autoAppend();
+
+    // 获取最后一节文本节点
+    getLastTextNode(node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node;
+      }
+      for (let i = node.childNodes.length - 1; i >= 0; i--) {
+        let result = this.getLastTextNode(node.childNodes[i]);
+        if (result) {
+          return result;
+        }
+      }
+      return null;
+    },
+
+    updateCursor() {
+      // 获取最后一个文本元素
+      
+      // let lastTextNode = this.getLastTextNode(textElement);
+      console.log("test", this.$refs.test);
+      let lastTextNode = this.getLastTextNode(this.$refs.test);
+      // 创建一个临时的文本节点，以便选中最后一个文字
+      let tempText = document.createTextNode(".");
+      if (lastTextNode) {
+        lastTextNode.parentNode.appendChild(tempText);
+      } else {
+        textElement.appendChild(tempText);
+      }
+
+      // 选中最后一个文字
+      const range = document.createRange();
+      range.setStart(tempText, 0);
+      range.setEnd(tempText, 0);
+
+      // 这个文字是相对于浏览器
+      const rect = range.getBoundingClientRect();
+      const textRect = textContainer.getBoundingClientRect();
+
+      const x = rect.left - textRect.left;
+      const y = rect.top - textRect.top - 10; // 10 是光标高度的一半，为了居中显示光标
+
+      cursor.style.transform = `translate(${x}px,${y}px)`;
+
+      tempText.remove();
+    }
+  }
+}
+</script>
+<style>
+.el-col-22 {
+  width: 700px;
+  margin-top: 5px;
+}
+
+.tip {
+  color: #000000;
+  text-align: left;
+  border-radius: 10px;
+  font-family: sans-serif;
+  padding: 10px;
+  width: auto;
+  display: inline-block !important;
+  display: inline;
+}
+
+.right {
+  background-color: #ffffff;
+}
+
+.left {
+  width: 800px;
+  background-color: forestgreen;
+}
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+  font-family: Arial, sans-serif;
+  color: #333;
+  border-radius: 10px;
+  margin-top: 50px;
+  background-color: #e0fbff;
+}
+
+/* Chat Header Styles */
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 50px;
+  background-color: #8aebf4;
+  border-radius: 10px;
+  border-bottom: 1px solid #ffffff;
+}
+
+.chat-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #5f5f5f;
+}
+
+/* Chat Content Styles */
+.chat-content {
+  flex-grow: 1;
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
+  position: relative
+}
+
+/* Chat Input Container Styles */
+.chat-input-container {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px;
+  background-color: #fff;
+}
+
+/* Chat Input Styles */
+.chat-input {
+  flex-grow: 1;
+  resize: none;
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  font-size: 1rem;
+  line-height: 1.5;
+  outline: none;
+}
+
+/* Chat Send Button Styles */
+.chat-send-button {
+  margin-left: 10px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background-color: #007bff;
+  color: #fff;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: #0069d9;
+  }
+}
+
+.img {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+
+
+}
+
+.cursor {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  background-color: #000;
+  border-radius: 10px;
+  animation: cursorBlink 0.5s infinite;
+}
+
+@keyframes cursorBlink {
+  0% {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+</style>
